@@ -1,5 +1,5 @@
 import { createStore } from "solid-js/store"
-import { createSignal } from "solid-js"
+import { createSignal, createEffect } from "solid-js"
 
 export type Project = {
   id: string
@@ -29,6 +29,31 @@ const [loading, setLoading] = createSignal(false)
 const [error, setError] = createSignal<string | null>(null)
 
 const API_BASE = "/api"
+
+// URL parameter synchronization
+let isInitialized = false
+
+function syncToURL(projectId: string | null) {
+  const url = new URL(window.location.href)
+  if (projectId) {
+    url.searchParams.set("project", projectId)
+  } else {
+    url.searchParams.delete("project")
+    url.searchParams.delete("conversation")
+  }
+  window.history.replaceState(null, "", url.toString())
+}
+
+function initializeFromURL() {
+  if (isInitialized) return
+  isInitialized = true
+  
+  const url = new URL(window.location.href)
+  const projectId = url.searchParams.get("project")
+  if (projectId) {
+    setSelectedProjectId(projectId)
+  }
+}
 
 export const projectStore = {
   projects,
@@ -123,11 +148,16 @@ export const projectStore = {
 
   selectProject(id: string | null) {
     setSelectedProjectId(id)
+    syncToURL(id)
     if (id) {
       this.fetchPapers(id)
     } else {
       setPapers([])
     }
+  },
+
+  initializeFromURL() {
+    initializeFromURL()
   },
 
   async fetchPapers(projectId: string) {

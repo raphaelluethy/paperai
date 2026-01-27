@@ -1,6 +1,6 @@
 /* @jsxImportSource solid-js */
 import { render } from "solid-js/web"
-import { createSignal, onMount, Show, createEffect } from "solid-js"
+import { createSignal, onMount, Show, createEffect, onCleanup } from "solid-js"
 import { MessageSquare, Files, Settings } from "lucide-solid"
 import { projectStore } from "./stores/projectStore.ts"
 import { chatStore } from "./stores/chatStore.ts"
@@ -11,6 +11,9 @@ import { FileUpload } from "./components/FileUpload.tsx"
 import { ChatInterface } from "./components/ChatInterface.tsx"
 import { ProjectSettings } from "./components/ProjectSettings.tsx"
 import { ThemeToggle } from "./components/ThemeToggle.tsx"
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts.ts"
+import { getShortcutKeys } from "./config/shortcuts.ts"
+import { useURLParams } from "./hooks/useURLParams.ts"
 
 type Tab = "chat" | "files" | "settings"
 
@@ -20,12 +23,50 @@ function App() {
   const [activeTab, setActiveTab] = createSignal<Tab>("chat")
 
   onMount(async () => {
+    // Initialize from URL parameters
+    const url = new URL(window.location.href)
+    const projectIdFromURL = url.searchParams.get("project")
+    const conversationIdFromURL = url.searchParams.get("conversation")
+
     await projectStore.fetchProjects()
+
+    // If there's a project in the URL, select it
+    if (projectIdFromURL) {
+      projectStore.selectProject(projectIdFromURL)
+      
+      // If there's also a conversation, load it
+      if (conversationIdFromURL) {
+        await chatStore.loadConversation(conversationIdFromURL)
+      } else {
+        chatStore.connect(projectIdFromURL)
+      }
+    }
+
+    // Add keyboard shortcut handler for Cmd+Shift+O to create new chat
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'o') {
+        e.preventDefault()
+        // Create new chat if a project is selected
+        if (projectStore.selectedProjectId()) {
+          setActiveTab("chat")
+          chatStore.createNewChat()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    onCleanup(() => {
+      window.removeEventListener('keydown', handleKeyDown)
+    })
   })
 
   createEffect(() => {
     const projectId = projectStore.selectedProjectId()
-    if (projectId) {
+    const conversationId = chatStore.currentConversationId()
+    
+    // Only auto-connect if not loading a specific conversation
+    if (projectId && !conversationId) {
       chatStore.connect(projectId)
     }
   })

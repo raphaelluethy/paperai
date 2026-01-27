@@ -1,5 +1,5 @@
 import { createStore } from "solid-js/store"
-import { createSignal } from "solid-js"
+import { createSignal, createEffect } from "solid-js"
 
 export type Message = {
   id: string
@@ -46,6 +46,23 @@ let currentProjectId: string | null = null
 
 const API_BASE = "/api"
 
+// URL parameter synchronization
+function syncToURL(projectId: string | null, conversationId: string | null = null) {
+  const url = new URL(window.location.href)
+  if (projectId) {
+    url.searchParams.set("project", projectId)
+  } else {
+    url.searchParams.delete("project")
+    url.searchParams.delete("conversation")
+  }
+  if (conversationId) {
+    url.searchParams.set("conversation", conversationId)
+  } else {
+    url.searchParams.delete("conversation")
+  }
+  window.history.replaceState(null, "", url.toString())
+}
+
 export const chatStore = {
   messages,
   agentActivity,
@@ -69,9 +86,11 @@ export const chatStore = {
     if (conversationId) {
       setCurrentConversationId(conversationId)
       setIsReadOnly(true)
+      syncToURL(projectId, conversationId)
     } else {
       setCurrentConversationId(null)
       setIsReadOnly(false)
+      syncToURL(projectId, null)
     }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
@@ -141,6 +160,7 @@ export const chatStore = {
       setMessages(loadedMessages)
       setCurrentConversationId(conversationId)
       setIsReadOnly(true)
+      syncToURL(currentProjectId, conversationId)
       
       // Load agent activity from the last assistant message if available
       const lastAssistantMsg = loadedMessages.reverse().find((m: Message) => m.role === "assistant")
@@ -159,6 +179,7 @@ export const chatStore = {
     setIsReadOnly(false)
     setSessionId(null)
     if (currentProjectId) {
+      syncToURL(currentProjectId, null)
       this.connect(currentProjectId)
     }
   },
@@ -173,6 +194,7 @@ export const chatStore = {
       setConversations(conversations.filter((c) => c.id !== conversationId))
       
       if (currentConversationId() === conversationId) {
+        syncToURL(currentProjectId, null)
         this.createNewChat()
       }
     } catch (e) {
