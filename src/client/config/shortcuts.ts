@@ -1,4 +1,4 @@
-import { KeyboardShortcut } from "../hooks/useKeyboardShortcuts"
+import type { KeyboardShortcut } from "../hooks/useKeyboardShortcuts"
 import { chatStore } from "../stores/chatStore"
 import { projectStore } from "../stores/projectStore"
 
