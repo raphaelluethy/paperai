@@ -34,6 +34,8 @@ export const paperChunks = pgTable(
     content: text("content").notNull(),
     embedding: vector("embedding", { dimensions: 768 }),
     chunkIndex: integer("chunk_index").notNull(),
+    embeddingProvider: text("embedding_provider"),
+    embeddingModel: text("embedding_model"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [index("embedding_idx").using("hnsw", table.embedding.op("vector_cosine_ops"))]

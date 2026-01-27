@@ -1,14 +1,18 @@
 import { Context, Effect, Layer } from "effect"
 import { embedMany } from "ai"
 import { ollama } from "ollama-ai-provider-v2"
+import { openai } from "@ai-sdk/openai"
 import { db, schema } from "../db/index.ts"
 import { eq, sql, cosineDistance, desc } from "drizzle-orm"
 import type { Paper, PaperChunk } from "../db/schema.ts"
 
 const PDFTOTEXT_PATH = "/opt/homebrew/bin/pdftotext"
-const EMBEDDING_MODEL = "nomic-embed-text"
 const CHUNK_SIZE = 512
 const CHUNK_OVERLAP = 50
+
+// Embedding configuration from environment
+const EMBEDDING_PROVIDER = (Bun.env.EMBEDDING_PROVIDER ?? "ollama") as "ollama" | "openai"
+const EMBEDDING_MODEL = Bun.env.EMBEDDING_MODEL ?? "nomic-embed-text"
 
 export type IndexProgress = {
   total: number
@@ -29,6 +33,7 @@ export class IndexingService extends Context.Tag("IndexingService")<
       onProgress: (progress: IndexProgress) => void
     ) => Effect.Effect<void, Error>
     readonly isIndexed: (paperId: string) => Effect.Effect<boolean, Error>
+    readonly needsReindexing: (paperId: string) => Effect.Effect<boolean, Error>
     readonly deletePaperIndex: (paperId: string) => Effect.Effect<void, Error>
     readonly searchSimilar: (
       projectId: string,
@@ -37,6 +42,35 @@ export class IndexingService extends Context.Tag("IndexingService")<
     ) => Effect.Effect<Array<{ chunk: PaperChunk; paper: Paper; similarity: number }>, Error>
   }
 >() {}
+
+// Helper type to work around version mismatch between ollama provider and ai SDK
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type EmbeddingModelAny = any
+
+async function generateEmbeddings(values: string[]): Promise<number[][]> {
+  switch (EMBEDDING_PROVIDER) {
+    case "openai": {
+      if (!Bun.env.OPENAI_API_KEY) {
+        throw new Error("OPENAI_API_KEY is required when using OpenAI embedding provider")
+      }
+      const model: EmbeddingModelAny = openai.textEmbeddingModel(EMBEDDING_MODEL)
+      const { embeddings } = await embedMany({
+        model,
+        values,
+      })
+      return embeddings
+    }
+    case "ollama":
+    default: {
+      const model: EmbeddingModelAny = ollama.embeddingModel(EMBEDDING_MODEL)
+      const { embeddings } = await embedMany({
+        model,
+        values,
+      })
+      return embeddings
+    }
+  }
+}
 
 function chunkText(text: string, chunkSize: number, overlap: number): string[] {
   const chunks: string[] = []
@@ -78,10 +112,7 @@ export const IndexingServiceLive = Layer.succeed(
             return []
           }
 
-          const { embeddings } = await embedMany({
-            model: ollama.embeddingModel(EMBEDDING_MODEL),
-            values: chunks,
-          })
+          const embeddings = await generateEmbeddings(chunks)
 
           await db.delete(schema.paperChunks).where(eq(schema.paperChunks.paperId, paper.id))
 
@@ -91,8 +122,10 @@ export const IndexingServiceLive = Layer.succeed(
               chunks.map((content, idx) => ({
                 paperId: paper.id,
                 content,
-                embedding: embeddings[idx],
+                embedding: embeddings[idx]!,
                 chunkIndex: idx,
+                embeddingProvider: EMBEDDING_PROVIDER,
+                embeddingModel: EMBEDDING_MODEL,
               }))
             )
             .returning()
@@ -117,11 +150,18 @@ export const IndexingServiceLive = Layer.succeed(
           })
 
           if (existingPaper) {
-            const hasChunks = await db.query.paperChunks.findFirst({
+            // Check if already indexed with current provider/model
+            const existingChunk = await db.query.paperChunks.findFirst({
               where: eq(schema.paperChunks.paperId, existingPaper.id),
             })
-            if (hasChunks) {
-              return
+            if (existingChunk) {
+              const providerMatches = existingChunk.embeddingProvider === EMBEDDING_PROVIDER
+              const modelMatches = existingChunk.embeddingModel === EMBEDDING_MODEL
+              if (providerMatches && modelMatches) {
+                return
+              }
+              // Provider or model mismatch - delete existing chunks for re-indexing
+              await db.delete(schema.paperChunks).where(eq(schema.paperChunks.paperId, existingPaper.id))
             }
           }
 
@@ -154,17 +194,16 @@ export const IndexingServiceLive = Layer.succeed(
             return
           }
 
-          const { embeddings } = await embedMany({
-            model: ollama.embeddingModel(EMBEDDING_MODEL),
-            values: chunks,
-          })
+          const embeddings = await generateEmbeddings(chunks)
 
           await db.insert(schema.paperChunks).values(
             chunks.map((content, idx) => ({
               paperId: paper.id,
               content,
-              embedding: embeddings[idx],
+              embedding: embeddings[idx]!,
               chunkIndex: idx,
+              embeddingProvider: EMBEDDING_PROVIDER,
+              embeddingModel: EMBEDDING_MODEL,
             }))
           )
         },
@@ -207,11 +246,18 @@ export const IndexingServiceLive = Layer.succeed(
               })
 
               if (existingPaper) {
-                const hasChunks = await db.query.paperChunks.findFirst({
+                // Check if already indexed with current provider/model
+                const existingChunk = await db.query.paperChunks.findFirst({
                   where: eq(schema.paperChunks.paperId, existingPaper.id),
                 })
-                if (hasChunks) {
-                  continue
+                if (existingChunk) {
+                  const providerMatches = existingChunk.embeddingProvider === EMBEDDING_PROVIDER
+                  const modelMatches = existingChunk.embeddingModel === EMBEDDING_MODEL
+                  if (providerMatches && modelMatches) {
+                    continue
+                  }
+                  // Provider or model mismatch - delete existing chunks for re-indexing
+                  await db.delete(schema.paperChunks).where(eq(schema.paperChunks.paperId, existingPaper.id))
                 }
               }
 
@@ -236,17 +282,16 @@ export const IndexingServiceLive = Layer.succeed(
               const chunks = chunkText(text, CHUNK_SIZE, CHUNK_OVERLAP)
               if (chunks.length === 0) continue
 
-              const { embeddings } = await embedMany({
-                model: ollama.embeddingModel(EMBEDDING_MODEL),
-                values: chunks,
-              })
+              const embeddings = await generateEmbeddings(chunks)
 
               await db.insert(schema.paperChunks).values(
                 chunks.map((content, idx) => ({
                   paperId: paper.id,
                   content,
-                  embedding: embeddings[idx],
+                  embedding: embeddings[idx]!,
                   chunkIndex: idx,
+                  embeddingProvider: EMBEDDING_PROVIDER,
+                  embeddingModel: EMBEDDING_MODEL,
                 }))
               )
             } catch (e) {
@@ -270,6 +315,22 @@ export const IndexingServiceLive = Layer.succeed(
         catch: (e) => new Error(`Failed to check index status: ${e}`),
       }),
 
+    needsReindexing: (paperId: string) =>
+      Effect.tryPromise({
+        try: async () => {
+          const chunk = await db.query.paperChunks.findFirst({
+            where: eq(schema.paperChunks.paperId, paperId),
+          })
+          if (!chunk) {
+            return true // Not indexed at all
+          }
+          const providerMatches = chunk.embeddingProvider === EMBEDDING_PROVIDER
+          const modelMatches = chunk.embeddingModel === EMBEDDING_MODEL
+          return !(providerMatches && modelMatches)
+        },
+        catch: (e) => new Error(`Failed to check reindex status: ${e}`),
+      }),
+
     deletePaperIndex: (paperId: string) =>
       Effect.tryPromise({
         try: async () => {
@@ -281,11 +342,7 @@ export const IndexingServiceLive = Layer.succeed(
     searchSimilar: (projectId: string, query: string, limit = 10) =>
       Effect.tryPromise({
         try: async () => {
-          const { embeddings } = await embedMany({
-            model: ollama.embeddingModel(EMBEDDING_MODEL),
-            values: [query],
-          })
-
+          const embeddings = await generateEmbeddings([query])
           const queryEmbedding = embeddings[0]!
 
           const similarity = sql<number>`1 - (${cosineDistance(schema.paperChunks.embedding, queryEmbedding)})`

@@ -5,5 +5,7 @@ declare module "bun" {
     NODE_ENV: "development" | "production" | "test";
     OPENAI_API_KEY: string;
     PAPERS_DIR: string;
+    EMBEDDING_PROVIDER: "ollama" | "openai";
+    EMBEDDING_MODEL: string;
   }
 }
