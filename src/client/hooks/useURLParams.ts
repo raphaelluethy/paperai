@@ -16,7 +16,7 @@ export function useURLParams() {
     const url = new URL(window.location.href)
     const projectId = url.searchParams.get("project")
     const conversationId = url.searchParams.get("conversation")
-    
+
     setParams({
       projectId,
       conversationId,
@@ -26,7 +26,7 @@ export function useURLParams() {
   // Update URL when params change
   const updateParams = (newParams: Partial<URLParams>) => {
     const url = new URL(window.location.href)
-    
+
     if (newParams.projectId !== undefined) {
       if (newParams.projectId) {
         url.searchParams.set("project", newParams.projectId)
@@ -35,7 +35,7 @@ export function useURLParams() {
         url.searchParams.delete("conversation")
       }
     }
-    
+
     if (newParams.conversationId !== undefined) {
       if (newParams.conversationId) {
         url.searchParams.set("conversation", newParams.conversationId)
@@ -43,9 +43,9 @@ export function useURLParams() {
         url.searchParams.delete("conversation")
       }
     }
-    
+
     window.history.replaceState(null, "", url.toString())
-    
+
     setParams((current) => ({
       ...current,
       ...newParams,

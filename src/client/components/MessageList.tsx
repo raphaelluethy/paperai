@@ -50,6 +50,9 @@ export function MessageList() {
                     <span class="text-[0.65rem] uppercase tracking-wider font-semibold text-fg-subtle">
                       {message.role === "user" ? "You" : message.role === "assistant" ? "Claude" : "System"}
                     </span>
+                    <span class="text-[0.65rem] text-fg-muted">
+                      {formatTime(message.timestamp)}
+                    </span>
                   </div>
                   <div
                     class={`max-w-[90%] rounded-2xl px-4 py-3 overflow-hidden ${

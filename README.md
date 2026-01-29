@@ -4,20 +4,23 @@ Academic paper analysis application powered by Claude. Create projects, define e
 
 ## Features
 
-- **Project Management**: Create and organize research projects with custom evaluation criteria
+- **Project Management**: Create and organize research projects with custom evaluation criteria, questions, and tags
 - **PDF Upload**: Upload academic papers for analysis
 - **AI-Powered Analysis**: Claude analyzes papers against your defined criteria
-- **Agent Activity Visualization**: Real-time view of main agent and sub-agent activity
-- **Conversation Persistence**: Full chat history saved to database
+- **Agent Activity Visualization**: Real-time view of main agent and sub-agent activity with tool usage tracking
+- **Conversation Persistence**: Full chat history saved to database with timestamped messages
+- **Chat History**: Browse and view previous conversations, start new chats anytime
+- **Theme Support**: Light and dark modes with warm, paper-inspired color palette
+- **Keyboard Shortcuts**: Quick access to common actions
 
 ## Tech Stack
 
 - **Runtime**: Bun
-- **Frontend**: SolidJS
+- **Frontend**: SolidJS with @solidjs/router
 - **Backend**: Effect with Bun.serve()
 - **AI**: Claude Agent SDK
 - **Database**: PostgreSQL with Drizzle ORM
-- **Deployment**: Docker
+- **Deployment**: Docker with docker-compose
 
 ## Quick Start
 
@@ -132,3 +135,25 @@ paperai/
 3. **Chat with Claude**: Ask questions about your papers
 4. **Agent Analysis**: Claude uses sub-agents to analyze multiple papers in parallel
 5. **View Activity**: Watch the agent activity tree to see analysis progress
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd/Ctrl + Shift + O` | Start new chat |
+| `Cmd/Ctrl + B` | Toggle sidebar |
+| `Enter` | Send message |
+| `Shift + Enter` | New line in message |
+
+## Architecture
+
+PaperAI uses a multi-agent architecture:
+
+- **Main Agent**: Handles user queries and orchestrates sub-agents
+- **Sub-Agents**: Spawned for parallel paper analysis
+- **Tools**: Agents can Read, Glob, Grep, and use Bash commands
+- **WebSocket**: Real-time updates for streaming responses and tool activity
+
+## License
+
+MIT
