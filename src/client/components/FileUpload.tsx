@@ -120,11 +120,8 @@ export function FileUpload() {
             }
           >
             <For each={projectStore.papers}>
-              {(paper, index) => (
-                <div 
-                  class="flex items-center gap-3 rounded-xl border border-border bg-surface-alt p-3.5 animate-fade-in"
-                  style={{ "animation-delay": `${index() * 0.05}s` }}
-                >
+              {(paper) => (
+                <div class="flex items-center gap-3 rounded-xl border border-border bg-surface-alt p-3.5">
                   <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-subtle text-primary">
                     <FileText size={18} />
                   </div>
