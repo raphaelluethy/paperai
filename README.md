@@ -107,6 +107,51 @@ paperai/
 | `DATABASE_URL` | `postgres://paperai:paperai@localhost:5432/paperai` | PostgreSQL connection string |
 | `PAPERS_DIR` | `./papers` | Directory for PDF storage |
 
+## LLM Provider Configuration
+
+PaperAI supports two modes for LLM provider configuration:
+
+### Claude Max/Pro Mode (USE_LOCAL=true)
+
+Uses your Claude cloud subscription via the `claude` CLI authentication. This mode requires you to have the Claude Code CLI installed and authenticated with your Anthropic account.
+
+### Custom Provider Mode
+
+Uses custom Anthropic-compatible API providers (e.g., Synthetic, OpenRouter, or self-hosted endpoints). This mode is activated when `USE_LOCAL` is not set or set to a falsy value.
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `USE_LOCAL` | No | Set to `"true"` or `"1"` to enable Claude Max/Pro mode (local mode). Omit or set to any other value for custom provider mode. |
+| `ANTHROPIC_BASE_URL` | Yes (custom mode) | API endpoint URL for the custom provider (e.g., `https://api.synthetic.li/v1/`) |
+| `ANTHROPIC_AUTH_TOKEN` | Yes (custom mode) | Authentication token for the custom provider (alternative to `ANTHROPIC_API_KEY`) |
+| `ANTHROPIC_API_KEY` | Yes (custom mode) | API key for the custom provider (alternative to `ANTHROPIC_AUTH_TOKEN`) |
+| `ANTHROPIC_DEFAULT_OPUS_MODEL` | No | Model identifier for Claude Opus (default: `claude-opus-4-20250514`) |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL` | No | Model identifier for Claude Sonnet (default: `claude-sonnet-4-20250514`) |
+| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | No | Model identifier for Claude Haiku (default: `claude-haiku-4-20250514`) |
+| `CLAUDE_CODE_SUBAGENT_MODEL` | No | Model to use for sub-agents (e.g., `claude-sonnet-4-20250514`) |
+| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | No | Set to `"1"` to disable non-essential traffic (telemetry, etc.) |
+
+### Example Configurations
+
+**Claude Max/Pro Mode:**
+```bash
+USE_LOCAL=true
+CLAUDE_CODE_SUBAGENT_MODEL=claude-sonnet-4-20250514
+```
+
+**Custom Provider Mode (e.g., Synthetic):**
+```bash
+USE_LOCAL=false
+ANTHROPIC_BASE_URL=https://api.synthetic.li/v1/
+ANTHROPIC_AUTH_TOKEN=your-token-here
+ANTHROPIC_DEFAULT_OPUS_MODEL=claude-opus-4-20250514
+ANTHROPIC_DEFAULT_SONNET_MODEL=claude-sonnet-4-20250514
+ANTHROPIC_DEFAULT_HAIKU_MODEL=claude-haiku-4-20250514
+CLAUDE_CODE_SUBAGENT_MODEL=claude-sonnet-4-20250514
+```
+
 ## API Endpoints
 
 ### Projects
@@ -141,7 +186,7 @@ paperai/
 | Shortcut | Action |
 |----------|--------|
 | `Cmd/Ctrl + Shift + O` | Start new chat |
-| `Cmd/Ctrl + B` | Toggle sidebar |
+| `Cmd/Ctrl + B` | Toggle agent activity sidebar (right panel) |
 | `Enter` | Send message |
 | `Shift + Enter` | New line in message |
 

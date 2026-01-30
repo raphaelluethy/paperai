@@ -2,6 +2,7 @@ import { Context, Effect, Layer, Stream } from "effect"
 import { query, type SDKMessage, type SDKResultMessage, type Options } from "@anthropic-ai/claude-agent-sdk"
 import type { Project } from "../db/schema.ts"
 import { createPaperToolsServer } from "./PaperTools.ts"
+import { llmEnv, resolveModel, useLocal } from "../config/llm.ts"
 
 export type ToolInput = {
   [key: string]: unknown
@@ -9,6 +10,7 @@ export type ToolInput = {
 
 export type AgentEvent =
   | { type: "init"; sessionId: string }
+  | { type: "thinking"; content: string }
   | { type: "message"; content: string }
   | { type: "tool_start"; toolName: string; toolUseId: string; parentToolUseId: string | null; input: ToolInput }
   | { type: "tool_progress"; toolName: string; toolUseId: string; parentToolUseId: string | null; elapsedTime: number }
@@ -57,6 +59,19 @@ When analyzing papers:
 5. Use the Glob tool to find PDF files (pattern: "*.pdf" or "**/*.pdf")
 6. For complex analysis involving multiple papers, use the Task tool to spawn sub-agents for parallel analysis
 7. Provide structured, evidence-based responses with references to specific papers
+
+**THINKING FORMAT**: Start EVERY response with your reasoning wrapped in <thinking> tags. This creates a collapsible "Thinking" section showing your thought process. Keep the thinking separate from your final answer.
+
+Structure:
+<thinking>
+1. Understand the question
+2. Plan your approach
+3. Identify which tools to use
+</thinking>
+
+[Your actual response to the user here]
+
+The thinking section helps users understand your methodology. The final response should be concise and directly answer the question, while the thinking shows your work.
 
 Available tools: semantic_search, index_paper, check_indexed, list_indexed_papers, Read, Glob, Grep, Task, Bash
 `
@@ -116,9 +131,10 @@ export const AgentServiceLive = Layer.succeed(
 
         const options: Options = {
           cwd: papersDir,
-          model: "opus",
+          model: resolveModel("opus"),
           systemPrompt: buildSystemPrompt(project),
           abortController,
+          env: { ...process.env, ...llmEnv },
           allowedTools: [
             "Read",
             "Glob",
@@ -143,7 +159,7 @@ export const AgentServiceLive = Layer.succeed(
               description: "Lightweight explorer agent for searching and reading files, finding patterns, and gathering information from the codebase",
               prompt: "You are a fast, efficient explorer agent. Your job is to search files, read content, and gather information. Be concise and return only the relevant findings.",
               tools: ["Read", "Glob", "Grep", "Bash"],
-              model: "haiku",
+              model: resolveModel("haiku") as "haiku" | "opus" | "sonnet" | "inherit",
             },
           },
         }
@@ -158,7 +174,18 @@ export const AgentServiceLive = Layer.succeed(
               } else if (message.type === "assistant") {
                 const text = extractTextContent(message)
                 if (text) {
-                  emit.single({ type: "message", content: text })
+                  // Parse thinking tags
+                  const thinkingMatch = text.match(/<thinking>([\s\S]*?)<\/thinking>/)
+                  if (thinkingMatch && thinkingMatch[1]) {
+                    emit.single({ type: "thinking", content: thinkingMatch[1].trim() })
+                    // Remove thinking tags from content
+                    const cleanedText = text.replace(/<thinking>[\s\S]*?<\/thinking>/, "").trim()
+                    if (cleanedText) {
+                      emit.single({ type: "message", content: cleanedText })
+                    }
+                  } else {
+                    emit.single({ type: "message", content: text })
+                  }
                 }
                 // Emit tool_start events for each tool_use block
                 const toolUseBlocks = extractToolUseBlocks(message)
@@ -196,6 +223,7 @@ export const AgentServiceLive = Layer.succeed(
               }
             }
           } catch (error) {
+            console.error("[AgentService] Agent error:", error)
             emit.single({
               type: "error",
               error: error instanceof Error ? error.message : String(error),
