@@ -1,6 +1,6 @@
 /* @jsxImportSource solid-js */
 import { For, Show, createSignal, createEffect, onCleanup } from "solid-js"
-import { FileText, FolderSearch, Search, Zap, Terminal, Wrench, ChevronDown, ChevronRight, Check, X, Circle, MoreHorizontal, Loader2 } from "lucide-solid"
+import { FileText, FolderSearch, Search, Zap, Terminal, Wrench, ChevronDown, ChevronRight, Check, X, Circle, MoreHorizontal, Loader2, PanelRightClose, PanelRight } from "lucide-solid"
 import { chatStore, type AgentActivityNode } from "../stores/chatStore.ts"
 import { AgentStatusBar } from "./AgentStatusBar.tsx"
 
@@ -166,35 +166,91 @@ function ToolNode(props: { node: AgentActivityNode; depth?: number }) {
   )
 }
 
-export function AgentActivityTree() {
+type AgentActivityTreeProps = {
+  isExpanded: boolean
+  onToggle: () => void
+}
+
+export function AgentActivityTree(props: AgentActivityTreeProps) {
   return (
-    <div class="w-[380px] bg-surface-alt border-l border-border-muted flex flex-col shrink-0">
-      <AgentStatusBar />
-      
-      <div class="flex-1 overflow-y-auto p-2.5">
-        <Show
-          when={chatStore.agentActivity.length > 0}
-          fallback={
-            <div class="flex items-center justify-center h-full">
-              <Show when={chatStore.isProcessing()}>
-                <div class="flex items-center gap-2 text-fg-muted animate-fade-in">
-                  <Loader2 size={14} class="animate-spin" />
-                  <span class="text-sm">Initializing...</span>
-                </div>
-              </Show>
-              <Show when={!chatStore.isProcessing()}>
-                <span class="text-fg-subtle text-sm">Activity will appear here</span>
-              </Show>
-            </div>
-          }
-        >
-          <div class="flex flex-col gap-0.5">
-            <For each={chatStore.agentActivity}>
-              {(node) => <ToolNode node={node} />}
-            </For>
+    <>
+      {/* Expanded Sidebar */}
+      <Show when={props.isExpanded}>
+        <div class="w-[380px] bg-surface-alt border-l border-border-muted flex flex-col shrink-0">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-border-muted bg-surface-alt shrink-0">
+            <span class="text-sm font-semibold text-fg">Agent Activity</span>
+            <button
+              type="button"
+              onClick={() => props.onToggle()}
+              class="p-1.5 rounded-lg hover:bg-surface-muted text-fg-subtle transition-colors"
+              title="Collapse sidebar (Cmd/Ctrl+B)"
+            >
+              <PanelRightClose size={16} />
+            </button>
           </div>
-        </Show>
-      </div>
-    </div>
+
+          <div class="flex-1 overflow-y-auto p-2.5">
+            <Show
+              when={chatStore.agentActivity.length > 0}
+              fallback={
+                <div class="flex flex-col items-center justify-center h-full p-4 text-center">
+                  <Show when={chatStore.isThinking()}>
+                    <div class="flex flex-col items-center gap-3 text-fg-muted animate-fade-in">
+                      <div class="w-10 h-10 rounded-xl bg-surface-emphasis flex items-center justify-center">
+                        <Loader2 size={20} class="animate-spin text-primary" />
+                      </div>
+                      <div class="flex flex-col gap-1">
+                        <span class="text-sm font-medium text-fg">Claude is thinking...</span>
+                        <span class="text-xs text-fg-subtle max-w-[200px]">Analyzing your question and planning the approach</span>
+                      </div>
+                    </div>
+                  </Show>
+                  <Show when={chatStore.isProcessing() && !chatStore.isThinking()}>
+                    <div class="flex flex-col items-center gap-3 text-fg-muted animate-fade-in">
+                      <div class="w-10 h-10 rounded-xl bg-surface-emphasis flex items-center justify-center">
+                        <Loader2 size={20} class="animate-spin text-success" />
+                      </div>
+                      <div class="flex flex-col gap-1">
+                        <span class="text-sm font-medium text-fg">Working on response...</span>
+                        <span class="text-xs text-fg-subtle max-w-[200px]">Tools will appear here when used</span>
+                      </div>
+                    </div>
+                  </Show>
+                  <Show when={!chatStore.isProcessing()}>
+                    <span class="text-fg-subtle text-sm">Activity will appear here</span>
+                  </Show>
+                </div>
+              }
+            >
+              <div class="flex flex-col gap-0.5">
+                <For each={chatStore.agentActivity}>
+                  {(node) => <ToolNode node={node} />}
+                </For>
+              </div>
+            </Show>
+          </div>
+        </div>
+      </Show>
+
+      {/* Collapsed Sidebar - just a button to expand */}
+      <Show when={!props.isExpanded}>
+        <div class="w-12 bg-surface-alt border-l border-border-muted flex flex-col items-center py-4 shrink-0">
+          <button
+            type="button"
+            onClick={() => props.onToggle()}
+            class="p-2 rounded-lg hover:bg-surface-muted text-fg-subtle transition-colors mb-4"
+            title="Expand agent activity sidebar (Cmd/Ctrl+B)"
+          >
+            <PanelRight size={20} />
+          </button>
+
+          <Show when={chatStore.agentActivity.length > 0}>
+            <div class="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center">
+              <div class="w-2 h-2 bg-success rounded-full animate-pulse" />
+            </div>
+          </Show>
+        </div>
+      </Show>
+    </>
   )
 }

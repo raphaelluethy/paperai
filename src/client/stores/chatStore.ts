@@ -5,6 +5,7 @@ export type Message = {
   id: string
   role: "user" | "assistant" | "system"
   content: string
+  thinking?: string
   timestamp: Date
   agentActivity?: AgentActivityNode[]
 }
@@ -35,9 +36,11 @@ const [agentActivity, setAgentActivity] = createStore<AgentActivityNode[]>([])
 const [conversations, setConversations] = createStore<Conversation[]>([])
 const [isConnected, setIsConnected] = createSignal(false)
 const [isProcessing, setIsProcessing] = createSignal(false)
+const [isThinking, setIsThinking] = createSignal(false)
 const [sessionId, setSessionId] = createSignal<string | null>(null)
 const [queryStartTime, setQueryStartTime] = createSignal<number | null>(null)
 const [modelName, setModelName] = createSignal("opus")
+const [currentStreamingContent, setCurrentStreamingContent] = createSignal("")
 const [currentConversationId, setCurrentConversationId] = createSignal<string | null>(null)
 const [isReadOnly, setIsReadOnly] = createSignal(false)
 
@@ -69,6 +72,8 @@ export const chatStore = {
   conversations,
   isConnected,
   isProcessing,
+  isThinking,
+  currentStreamingContent,
   sessionId,
   queryStartTime,
   modelName,
@@ -225,26 +230,39 @@ export const chatStore = {
         setSessionId(data.sessionId as string)
         break
 
-      case "message": {
+      case "thinking": {
+        setIsThinking(false)
         const lastMessage = messages[messages.length - 1]
         if (lastMessage && lastMessage.role === "assistant") {
-          setMessages(messages.length - 1, "content", (c) => {
-            const newContent = data.content as string
-            if (c.length > 0 && !c.endsWith("\n") && !c.endsWith(" ") && !newContent.startsWith("\n") && !newContent.startsWith(" ")) {
-              return c + "\n\n" + newContent
-            }
-            return c + newContent
-          })
+          setMessages(messages.length - 1, "thinking", (t) => (t || "") + (data.content as string))
         } else {
-          setMessages([
-            ...messages,
-            {
-              id: crypto.randomUUID(),
-              role: "assistant",
-              content: data.content as string,
-              timestamp: new Date(),
-            },
-          ])
+          const newMessage = {
+            id: crypto.randomUUID(),
+            role: "assistant" as const,
+            content: "",
+            thinking: data.content as string,
+            timestamp: new Date(),
+          }
+          setMessages([...messages, newMessage])
+        }
+        break
+      }
+
+      case "message": {
+        setIsThinking(false)
+        const lastMessage = messages[messages.length - 1]
+        if (lastMessage && lastMessage.role === "assistant") {
+          setMessages(messages.length - 1, "content", (c) => c + (data.content as string))
+          setCurrentStreamingContent((c) => c + (data.content as string))
+        } else {
+          const newMessage = {
+            id: crypto.randomUUID(),
+            role: "assistant" as const,
+            content: data.content as string,
+            timestamp: new Date(),
+          }
+          setMessages([...messages, newMessage])
+          setCurrentStreamingContent(data.content as string)
         }
         break
       }
@@ -255,7 +273,9 @@ export const chatStore = {
 
       case "result":
         setIsProcessing(false)
+        setIsThinking(false)
         setQueryStartTime(null)
+        setCurrentStreamingContent("")
         setAgentActivity((activity) =>
           activity.map((node) => markAllDone(node))
         )
@@ -267,7 +287,9 @@ export const chatStore = {
 
       case "error":
         setIsProcessing(false)
+        setIsThinking(false)
         setQueryStartTime(null)
+        setCurrentStreamingContent("")
         setMessages([
           ...messages,
           {
@@ -298,8 +320,10 @@ export const chatStore = {
     ])
 
     setIsProcessing(true)
+    setIsThinking(true)
     setQueryStartTime(Date.now())
     setAgentActivity([])
+    setCurrentStreamingContent("")
 
     ws.send(JSON.stringify({ type: "chat", content }))
   },

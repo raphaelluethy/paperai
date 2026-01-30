@@ -108,6 +108,10 @@ async function handleChatMessage(
             ws.send(JSON.stringify({ type: "session", sessionId: event.sessionId }))
             break
 
+          case "thinking":
+            ws.send(JSON.stringify({ type: "thinking", content: event.content }))
+            break
+
           case "message":
             assistantContent += event.content
             ws.send(JSON.stringify({ type: "message", content: event.content }))

@@ -1,6 +1,6 @@
 /* @jsxImportSource solid-js */
-import { For, Show, createEffect } from "solid-js"
-import { FileText } from "lucide-solid"
+import { For, Show, createEffect, createSignal } from "solid-js"
+import { FileText, Loader2, ChevronDown, ChevronRight, Brain } from "lucide-solid"
 import { chatStore } from "../stores/chatStore.ts"
 import { Markdown } from "./Markdown.tsx"
 
@@ -24,6 +24,21 @@ export function MessageList() {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
+    })
+  }
+
+  // Track which thinking sections are expanded
+  const [expandedThinking, setExpandedThinking] = createSignal<Set<string>>(new Set())
+
+  const toggleThinking = (messageId: string) => {
+    setExpandedThinking(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId)
+      } else {
+        newSet.add(messageId)
+      }
+      return newSet
     })
   }
 
@@ -54,8 +69,30 @@ export function MessageList() {
                       {formatTime(message.timestamp)}
                     </span>
                   </div>
+                  
+                  {/* Thinking section - collapsible */}
+                  <Show when={message.role === "assistant" && message.thinking}>
+                    <button
+                      onClick={() => toggleThinking(message.id)}
+                      class="flex items-center gap-1.5 mb-2 px-3 py-1.5 text-xs font-medium text-fg-subtle bg-surface-emphasis/60 hover:bg-surface-emphasis rounded-lg transition-colors border border-border-muted/50"
+                    >
+                      <Brain size={12} />
+                      <span>Thinking</span>
+                      {expandedThinking().has(message.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    </button>
+                    
+                    <Show when={expandedThinking().has(message.id)}>
+                      <div class="max-w-[90%] mb-3 px-4 py-3 bg-surface-emphasis/30 border border-border-muted/50 rounded-xl text-fg-subtle text-sm overflow-hidden">
+                        <div class="text-xs font-medium text-fg-muted mb-2 uppercase tracking-wider">Thinking Process</div>
+                        <div class="whitespace-pre-wrap leading-relaxed">
+                          {message.thinking}
+                        </div>
+                      </div>
+                    </Show>
+                  </Show>
+                  
                   <div
-                    class={`max-w-[90%] rounded-2xl px-4 py-3 overflow-hidden ${
+                    class={`max-w-[90%] min-w-0 rounded-2xl px-4 py-3 overflow-hidden ${
                       message.role === "user"
                         ? "bg-user-bubble text-user-bubble-fg rounded-br-lg"
                         : message.role === "system"
@@ -79,6 +116,27 @@ export function MessageList() {
             )}
           </For>
         </div>
+
+        {/* Thinking indicator */}
+        <Show when={chatStore.isThinking()}>
+          <div class="max-w-3xl mx-auto mt-6 animate-fade-in">
+            <div class="flex items-center gap-3 text-fg-subtle bg-surface-emphasis/50 px-4 py-3 rounded-xl border border-border-muted">
+              <Loader2 size={18} class="animate-spin" />
+              <div class="flex flex-col gap-0.5">
+                <span class="text-sm font-medium">Claude is thinking...</span>
+                <span class="text-xs text-fg-muted">Analyzing your papers and planning the response</span>
+              </div>
+            </div>
+          </div>
+        </Show>
+
+        {/* Streaming indicator - only show when we have messages and are processing */}
+        <Show when={chatStore.isProcessing() && !chatStore.isThinking() && chatStore.messages.length > 0 && chatStore.messages[chatStore.messages.length - 1]?.role === "assistant"}>
+          <div class="max-w-3xl mx-auto mt-2 px-4 flex items-center gap-1.5 text-fg-subtle">
+            <span class="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+            <span class="text-xs">Generating...</span>
+          </div>
+        </Show>
       </Show>
     </div>
   )

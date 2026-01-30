@@ -1,5 +1,5 @@
 /* @jsxImportSource solid-js */
-import { createSignal, onMount, onCleanup, Show } from "solid-js"
+import { createSignal, onMount, Show, createEffect, onCleanup } from "solid-js"
 import { Square, Send, Eye, Plus } from "lucide-solid"
 import { chatStore } from "../stores/chatStore.ts"
 import { projectStore } from "../stores/projectStore.ts"
@@ -8,6 +8,7 @@ import { AgentActivityTree } from "./AgentActivityTree.tsx"
 
 export function ChatInterface() {
   const [input, setInput] = createSignal("")
+  const [agentSidebarExpanded, setAgentSidebarExpanded] = createSignal(true)
   let inputRef: HTMLTextAreaElement | undefined
 
   onMount(() => {
@@ -15,10 +16,21 @@ export function ChatInterface() {
     if (projectId) {
       chatStore.connect(projectId)
     }
-  })
 
-  onCleanup(() => {
-    chatStore.disconnect()
+    // Keyboard shortcut to toggle agent sidebar (Cmd/Ctrl+B)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl+B to toggle agent activity sidebar
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b" && !e.shiftKey) {
+        e.preventDefault()
+        setAgentSidebarExpanded(prev => !prev)
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+
+    onCleanup(() => {
+      window.removeEventListener("keydown", handleKeyDown)
+    })
   })
 
   const handleSubmit = (e: Event) => {
@@ -108,7 +120,10 @@ export function ChatInterface() {
         </div>
       </div>
 
-      <AgentActivityTree />
+      <AgentActivityTree 
+        isExpanded={agentSidebarExpanded()} 
+        onToggle={() => setAgentSidebarExpanded(prev => !prev)} 
+      />
     </div>
   )
 }
